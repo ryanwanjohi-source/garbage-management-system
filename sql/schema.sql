@@ -1,14 +1,16 @@
 -- ============================================================
---  Smart Sweep — database (SIMPLIFIED version)
+--  Smart Sweep — database
 --  Database: smart_sweep (MySQL, run under XAMPP)
 --
---  The database has only 6 tables:
---    users    — everyone in the system, including the admin
---    bins     — the smart bins and how full they are
---    alerts   — alerts raised by bins and drivers
---    routes   — collection routes (stops kept as one list)
---    invoices — bills sent to residents
---    payments — money received for the invoices
+--  The database has 7 tables:
+--    users              — everyone in the system, including the admin
+--    bins               — the smart bins and how full they are
+--    alerts             — alerts raised by bins and drivers
+--    routes             — collection routes (stops kept as one list)
+--    invoices           — bills sent to residents
+--    payments           — money received for the invoices
+--    telemetry_readings — every garbage-level reading the
+--                         telemetry system has received
 --
 --  HOW TO SET UP:
 --  1. Start MySQL in the XAMPP Control Panel.
@@ -169,3 +171,19 @@ INSERT INTO payments (payment_code, invoice_code, method, mpesa_ref, pay_date, a
 ('PAY-0870', 'INV-2213', 'M-Pesa', 'QK71MB30RD', '8 Nov 2026', 1500),
 ('PAY-0869', 'INV-2211', 'M-Pesa', 'QK70ZT55NK', '7 Nov 2026', 2500),
 ('PAY-0868', 'INV-2209', 'Card',   NULL,         '7 Nov 2026', 1200);
+
+-- ------------------------------------------------------------
+--  telemetry_readings — the log of the telemetry system.
+--  Every time a bin reports its garbage level, one row is
+--  added here: which bin, how full it was, how heavy, and
+--  when the reading arrived. The table starts empty and
+--  fills up as the telemetry system runs.
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS telemetry_readings;
+CREATE TABLE telemetry_readings (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    bin_code    VARCHAR(10)   NOT NULL,
+    fill_level  INT           NOT NULL,
+    weight_kg   DECIMAL(6,1)  NOT NULL,
+    recorded_at TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+);
