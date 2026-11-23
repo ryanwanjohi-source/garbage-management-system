@@ -162,6 +162,9 @@ CREATE TABLE payments (
     invoice_code VARCHAR(10) NOT NULL,
     method       VARCHAR(20) NOT NULL,
     mpesa_ref    VARCHAR(20) NULL,
+    reference    VARCHAR(30) NULL,
+    status       VARCHAR(15) NOT NULL DEFAULT 'Completed',
+    phone        VARCHAR(20) NULL,
     pay_date     VARCHAR(20) NOT NULL,
     amount       INT         NOT NULL
 );
