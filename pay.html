@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Smart Sweep — Pay an Invoice page.
      The front end of the Payments API (api/payments.php):
-     find an invoice, choose how to pay — M-Pesa, Card,
+     find an invoice, choose how to pay — M-Pesa, PayBill,
      Bank Transfer or Cash — and the API does the rest. -->
 <html lang="en">
 <head>
@@ -31,6 +31,7 @@
             <a href="checkpoints.html">Checkpoints</a>
             <a href="reports.html">Reports</a>
             <a href="pay.html" class="active">Pay Invoice</a>
+            <a href="reviews.html">Reviews</a>
             <a href="users.html">Users</a>
         </div>
         <div class="logout">
@@ -66,7 +67,7 @@
                 </div>
                 <p>
                     <label><input type="radio" name="method" value="M-Pesa" checked> M-Pesa</label> &nbsp;
-                    <label><input type="radio" name="method" value="Card"> Card</label> &nbsp;
+                    <label><input type="radio" name="method" value="M-Pesa PayBill"> M-Pesa PayBill</label> &nbsp;
                     <label><input type="radio" name="method" value="Bank Transfer"> Bank Transfer</label> &nbsp;
                     <label><input type="radio" name="method" value="Cash"> Cash</label>
                 </p>
@@ -77,11 +78,10 @@
                     <p class="foot-note">You will get an M-Pesa prompt on this phone — enter your PIN to pay.</p>
                 </div>
 
-                <div id="fieldsCard" style="display:none">
-                    <p>Card number<br>
-                    <input type="text" id="cardNumber" placeholder="e.g. 4242 4242 4242 4242" style="width:260px"></p>
-                    <p>Expiry (MM/YY) &nbsp; <input type="text" id="cardExpiry" placeholder="08/28" style="width:90px">
-                       &nbsp; Security code &nbsp; <input type="text" id="cardCvc" placeholder="123" style="width:70px"></p>
+                <div id="fieldsPaybill" style="display:none">
+                    <p class="foot-note">Pay on your phone with Lipa na M-Pesa → PayBill. When you continue,
+                    the API gives you the business number — your account number is your invoice code.
+                    The payment completes when Safaricom confirms it.</p>
                 </div>
 
                 <div id="fieldsBank" style="display:none">
@@ -107,7 +107,7 @@
             </div>
 
             <p class="foot-note">Payments are handled by the Smart Sweep Payments API (api/payments.php),
-            which accepts M-Pesa, Card, Bank Transfer and Cash. <span id="modeNote"></span></p>
+            which accepts M-Pesa, M-Pesa PayBill, Bank Transfer and Cash. <span id="modeNote"></span></p>
 
         </div>
     </div>
@@ -154,7 +154,7 @@ document.getElementById('findBtn').onclick = function () {
         .catch(function () { show('invoiceInfo', '<p>The payments service is not answering. Is the site running on XAMPP?</p>'); });
 };
 
-var fieldSets = { 'M-Pesa': 'fieldsMpesa', 'Card': 'fieldsCard', 'Bank Transfer': 'fieldsBank', 'Cash': 'fieldsCash' };
+var fieldSets = { 'M-Pesa': 'fieldsMpesa', 'M-Pesa PayBill': 'fieldsPaybill', 'Bank Transfer': 'fieldsBank', 'Cash': 'fieldsCash' };
 document.querySelectorAll('input[name="method"]').forEach(function (radio) {
     radio.onchange = function () {
         for (var m in fieldSets) {
@@ -169,11 +169,6 @@ document.getElementById('payBtn').onclick = function () {
     var method = document.querySelector('input[name="method"]:checked').value;
     var body = { action: 'initiate', invoice_code: currentInvoice.code, method: method };
     if (method === 'M-Pesa') body.phone = document.getElementById('phone').value;
-    if (method === 'Card') {
-        body.card_number = document.getElementById('cardNumber').value;
-        body.card_expiry = document.getElementById('cardExpiry').value;
-        body.card_cvc = document.getElementById('cardCvc').value;
-    }
     fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -183,6 +178,11 @@ document.getElementById('payBtn').onclick = function () {
                 '<tr><td><b>' + d.payment_code + '</b></td><td>' + d.method + '</td><td>' +
                 (d.mpesa_ref || d.reference || '—') + '</td><td>' + d.status + '</td><td class="num">' +
                 money(d.amount) + '</td></tr></table>';
+            if (d.paybill) {
+                html += '<p>On your phone: <b>Lipa na M-Pesa → PayBill</b> → business number <b>' +
+                    d.paybill.business_number + '</b>, account number <b>' + d.paybill.account_number +
+                    '</b> (your invoice code), amount <b>' + money(d.paybill.amount) + '</b>.</p>';
+            }
             if (d.bank) {
                 html += '<p>Transfer to: <b>' + d.bank.bank_name + '</b>, account name <b>' +
                     d.bank.account_name + '</b>, account number <b>' + d.bank.account_number +
