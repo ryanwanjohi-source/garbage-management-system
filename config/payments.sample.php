@@ -28,6 +28,15 @@ return [
         'callback_url'    => '',         // e.g. 'https://your-domain/smart-sweep/api/mpesa-callback.php'
     ],
 
+    // M-Pesa PayBill — the business number residents pay to on their
+    // phones (Lipa na M-Pesa → PayBill). The account number they quote
+    // is their invoice code. Register the C2B confirmation URL with
+    // Safaricom (api/mpesa-c2b.php) for paybill payments to complete
+    // themselves; until then the Accountant confirms them.
+    'paybill' => [
+        'business_number' => '123456',
+    ],
+
     // Where Bank Transfer payments are sent.
     'bank' => [
         'bank_name'      => 'Co-operative Bank',
