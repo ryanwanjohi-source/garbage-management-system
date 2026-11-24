@@ -6,7 +6,11 @@
 //  mode the payer has:
 //
 //    M-Pesa         — STK Push to the payer's phone (Daraja).
-//    Card           — bank card.
+//    M-Pesa PayBill — the resident pays on their phone (Lipa
+//                     na M-Pesa → PayBill), quoting the invoice
+//                     code as the account number; the payment
+//                     starts Pending and Safaricom's C2B
+//                     confirmation (mpesa-c2b.php) completes it.
 //    Bank Transfer  — the payer transfers to the Smart Sweep
 //                     account; the payment starts Pending and
 //                     the Accountant confirms it.
@@ -24,7 +28,7 @@
 //         {"action":"initiate", "invoice_code":"INV-2212",
 //          "method":"M-Pesa", "phone":"0712 345 678"}
 //         -> starts a payment. M-Pesa sends the STK Push;
-//            Card is checked and completed; Bank Transfer
+//            Bank Transfer
 //            returns the account details and the reference to
 //            quote; Cash is recorded as received.
 //
@@ -40,7 +44,7 @@
 //  TEST MODE: until real gateway details are put in
 //  config/payments.php (copy config/payments.sample.php and
 //  fill it in), the API runs in test mode and no real money
-//  moves: M-Pesa and Card payments complete with generated
+//  moves: M-Pesa payments complete with generated
 //  test references, and every response carries
 //  "test_mode": true so nobody mistakes them for real ones.
 //  With Daraja details in the config, M-Pesa sends a real
@@ -65,6 +69,9 @@ $config = [
         'bank_name'      => 'Co-operative Bank',
         'account_name'   => 'Smart Sweep Collections',
         'account_number' => '01134567891000',
+    ],
+    'paybill' => [
+        'business_number' => '123456',   // sample — the real one goes in config/payments.php
     ],
 ];
 $configFile = __DIR__ . '/../config/payments.php';
@@ -145,18 +152,6 @@ function normalisePhone($phone) {
     return preg_match('/^254[17]\d{8}$/', $p) ? $p : null;
 }
 
-// The card number check every gateway runs first (Luhn).
-function cardNumberValid($number) {
-    $n = preg_replace('/[\s\-]/', '', (string) $number);
-    if (!preg_match('/^\d{13,19}$/', $n)) return false;
-    $sum = 0; $double = false;
-    for ($i = strlen($n) - 1; $i >= 0; $i--) {
-        $d = (int) $n[$i];
-        if ($double) { $d *= 2; if ($d > 9) $d -= 9; }
-        $sum += $d; $double = !$double;
-    }
-    return $sum % 10 === 0;
-}
 
 // ---- Daraja (M-Pesa) STK Push — used when real details are set ----
 function darajaStkPush($cfg, $phone, $amount, $accountRef) {
@@ -232,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'status'   => $inv['status'],
             ],
             'payments'  => $stmt->fetchAll(PDO::FETCH_ASSOC),
-            'methods'   => ['M-Pesa', 'Card', 'Bank Transfer', 'Cash'],
+            'methods'   => ['M-Pesa', 'M-Pesa PayBill', 'Bank Transfer', 'Cash'],
         ]);
     }
     if (!empty($_GET['payment'])) {
@@ -278,7 +273,7 @@ if ($input['action'] !== 'initiate') {
 // ---- Start a payment ----
 $invoiceCode = strtoupper(trim($input['invoice_code'] ?? ''));
 $method      = trim($input['method'] ?? '');
-$methods     = ['M-Pesa', 'Card', 'Bank Transfer', 'Cash'];
+$methods     = ['M-Pesa', 'M-Pesa PayBill', 'Bank Transfer', 'Cash'];
 if (!in_array($method, $methods, true)) {
     fail('Choose a payment method: ' . implode(', ', $methods) . '.');
 }
@@ -317,23 +312,22 @@ if ($method === 'M-Pesa') {
     }
 }
 
-if ($method === 'Card') {
-    $number = $input['card_number'] ?? '';
-    $expiry = trim($input['card_expiry'] ?? '');
-    $cvc    = trim($input['card_cvc'] ?? '');
-    if (!cardNumberValid($number)) fail('That card number does not check out. Re-enter the number on the card.');
-    if (!preg_match('/^(0[1-9]|1[0-2])\/\d{2}$/', $expiry)) fail('Enter the card expiry as MM/YY, for example 08/28.');
-    [$mm, $yy] = explode('/', $expiry);
-    if ((int) ('20' . $yy) < (int) date('Y') || ((int) ('20' . $yy) === (int) date('Y') && (int) $mm < (int) date('n'))) {
-        fail('That card has expired. Use a current card.');
-    }
-    if (!preg_match('/^\d{3,4}$/', $cvc)) fail('Enter the 3-digit security code on the back of the card.');
-    if (!$config['test_mode']) {
-        fail('Card payments are not connected to a live gateway yet. Add a gateway in config/payments.php, or pay by M-Pesa, Bank Transfer or Cash.', 503);
-    }
-    $reference = 'CARD-' . substr(preg_replace('/\D/', '', $number), -4);
-    $status = 'Completed';
-    $extra['note'] = 'Test mode: the card was checked but not charged. The reference is generated for testing.';
+if ($method === 'M-Pesa PayBill') {
+    // The resident pays on their own phone: Lipa na M-Pesa → PayBill →
+    // the business number, with the invoice code as the account number.
+    // The payment waits as Pending; Safaricom's C2B confirmation
+    // (api/mpesa-c2b.php) completes it, or the Accountant confirms it.
+    $reference = 'PB-' . $paymentCode;
+    $status = 'Pending';
+    $extra['paybill'] = [
+        'business_number' => $config['paybill']['business_number'],
+        'account_number'  => $invoiceCode,
+        'amount'          => $amount,
+    ];
+    $extra['note'] = 'On your phone: Lipa na M-Pesa → PayBill → business number '
+        . $config['paybill']['business_number'] . ', account number ' . $invoiceCode
+        . ', amount KSh ' . number_format($amount) . '. The payment completes when '
+        . 'Safaricom confirms it, or when the Accountant confirms it has landed.';
 }
 
 if ($method === 'Bank Transfer') {
